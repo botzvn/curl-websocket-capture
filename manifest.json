@@ -1,0 +1,17 @@
+{
+  "manifest_version": 3,
+  "name": "cURL & WS Capture",
+  "version": "0.0.1",
+  "description": "Capture network requests and WebSocket connections.",
+  "permissions": ["webRequest", "storage", "tabs"],
+  "host_permissions": ["<all_urls>", "ws://*/*", "wss://*/*"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "icons": {
+    "128": "icon-128.png"
+  }
+}

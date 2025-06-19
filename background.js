@@ -97,16 +97,17 @@ async function handleRequest(details) {
         console.log(`Stored HTTP data with key: ${storageKey}`);
 
         // Notify popup about new data
-        try {
-          chrome.runtime.sendMessage({
+        chrome.runtime
+          .sendMessage({
             type: "NEW_DATA_CAPTURED",
             dataType: "http",
             domain: domain,
             url: details.url,
+          })
+          .catch(() => {
+            // Popup not open, ignore error
+            console.log("Popup not open for HTTP data notification");
           });
-        } catch (error) {
-          console.log("Popup not open, can't send new data notification");
-        }
       });
     } else if (isWs) {
       const storageKey = `wsData_${domain}`;
@@ -114,16 +115,17 @@ async function handleRequest(details) {
         console.log(`Stored WS data with key: ${storageKey}`);
 
         // Notify popup about new data
-        try {
-          chrome.runtime.sendMessage({
+        chrome.runtime
+          .sendMessage({
             type: "NEW_DATA_CAPTURED",
             dataType: "ws",
             domain: domain,
             url: details.url,
+          })
+          .catch(() => {
+            // Popup not open, ignore error
+            console.log("Popup not open for WS data notification");
           });
-        } catch (error) {
-          console.log("Popup not open, can't send new data notification");
-        }
       });
     }
   }
@@ -136,15 +138,15 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
   console.log("Tab activated:", activeInfo.tabId);
 
   // Send message to popup if it's open to refresh data
-  try {
-    chrome.runtime.sendMessage({
+  chrome.runtime
+    .sendMessage({
       type: "TAB_ACTIVATED",
       tabId: activeInfo.tabId,
+    })
+    .catch(() => {
+      // Popup not open, ignore error
+      console.log("Popup not open, can't send tab activation message");
     });
-  } catch (error) {
-    // Popup is not open, ignore error
-    console.log("Popup not open, can't send message");
-  }
 });
 
 // Handle tab updates (URL changes, page loads)
@@ -153,15 +155,15 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
     console.log("Tab updated and complete:", tabId);
 
     // Send message to popup if it's open to refresh data
-    try {
-      chrome.runtime.sendMessage({
+    chrome.runtime
+      .sendMessage({
         type: "TAB_UPDATED",
         tabId: tabId,
         url: tab.url,
+      })
+      .catch(() => {
+        // Popup not open, ignore error
+        console.log("Popup not open, can't send tab update message");
       });
-    } catch (error) {
-      // Popup is not open, ignore error
-      console.log("Popup not open, can't send message");
-    }
   }
 });

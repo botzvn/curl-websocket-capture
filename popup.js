@@ -357,6 +357,9 @@ function flashElementGreen(dataType) {
       .data-timestamp.flash-green {
         animation: flashGreen 0.8s ease-in-out 3;
       }
+      .data-timestamp {
+        margin-top: 6px;
+      }
     `;
     document.head.appendChild(style);
   }

@@ -3,8 +3,8 @@
   "name": "cURL & WS Capture",
   "version": "0.0.1",
   "description": "Capture network requests and WebSocket connections.",
-  "permissions": ["webRequest", "storage", "tabs"],
-  "host_permissions": ["<all_urls>", "ws://*/*", "wss://*/*"],
+  "permissions": ["webRequest", "storage", "activeTab"],
+  "optional_host_permissions": ["<all_urls>", "ws://*/*", "wss://*/*"],
   "background": {
     "service_worker": "background.js"
   },

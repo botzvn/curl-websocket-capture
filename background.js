@@ -1,9 +1,9 @@
 const PRESET_KEYWORDS = {
-  tiktok: {
+  "tiktok.com": {
     http: ["msToken", "device_id", "odinId"],
     ws: ["im-ws-sg.tiktok.com/ws/v2", "ttwid", "Web-Sdk-Ms-Token"],
   },
-  facebook: {
+  "facebook.com": {
     http: ["facebook", "api", "graphql"],
     ws: ["messenger", "edge-chat"],
   },
@@ -26,11 +26,22 @@ function getDomainFromUrl(url) {
   }
 }
 
-async function handleRequest(details) {
-  const data = await chrome.storage.sync.get("settings");
-  const settings = data.settings || { preset: "default", presets: {} };
+function getCurrentDomain() {
+  return new Promise((resolve) => {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      const url = tabs[0]?.url;
+      if (!url) return resolve(undefined);
+      resolve(getDomainFromUrl(url));
+    });
+  });
+}
 
-  const currentPreset = settings.preset || "default";
+async function handleRequest(details) {
+  const currentDomain = await getCurrentDomain();
+  const data = await chrome.storage.sync.get("settings");
+  const settings = data.settings || { preset: currentDomain, presets: {} };
+
+  const currentPreset = settings.preset || currentDomain;
   const presetOverrides = settings.presets?.[currentPreset] || {};
 
   // 1. Keywords HTTP
@@ -40,7 +51,7 @@ async function handleRequest(details) {
       .split("\n")
       .map((k) => k.trim())
       .filter(Boolean);
-  } else if (currentPreset !== "default") {
+  } else {
     keywordsHttp = PRESET_KEYWORDS[currentPreset]?.http || [];
   }
 
@@ -51,7 +62,7 @@ async function handleRequest(details) {
       .split("\n")
       .map((k) => k.trim())
       .filter(Boolean);
-  } else if (currentPreset !== "default") {
+  } else {
     keywordsWs = PRESET_KEYWORDS[currentPreset]?.ws || [];
   }
 
@@ -61,9 +72,9 @@ async function handleRequest(details) {
   let shouldCapture = false;
 
   if (isHttp) {
-    shouldCapture = keywordsHttp.length === 0 || keywordsHttp.every((keyword) => details.url.includes(keyword));
+    shouldCapture = keywordsHttp.every((keyword) => details.url.includes(keyword));
   } else if (isWs) {
-    shouldCapture = keywordsWs.length === 0 || keywordsWs.every((keyword) => details.url.includes(keyword));
+    shouldCapture = keywordsWs.every((keyword) => details.url.includes(keyword));
   }
 
   if (shouldCapture) {
@@ -82,14 +93,75 @@ async function handleRequest(details) {
 
     if (isHttp) {
       const storageKey = `httpData_${domain}`;
-      chrome.storage.local.set({ [storageKey]: requestData });
-      console.log(`Stored HTTP data with key: ${storageKey}`);
+      chrome.storage.local.set({ [storageKey]: requestData }, () => {
+        console.log(`Stored HTTP data with key: ${storageKey}`);
+
+        // Notify popup about new data
+        try {
+          chrome.runtime.sendMessage({
+            type: "NEW_DATA_CAPTURED",
+            dataType: "http",
+            domain: domain,
+            url: details.url,
+          });
+        } catch (error) {
+          console.log("Popup not open, can't send new data notification");
+        }
+      });
     } else if (isWs) {
       const storageKey = `wsData_${domain}`;
-      chrome.storage.local.set({ [storageKey]: requestData });
-      console.log(`Stored WS data with key: ${storageKey}`);
+      chrome.storage.local.set({ [storageKey]: requestData }, () => {
+        console.log(`Stored WS data with key: ${storageKey}`);
+
+        // Notify popup about new data
+        try {
+          chrome.runtime.sendMessage({
+            type: "NEW_DATA_CAPTURED",
+            dataType: "ws",
+            domain: domain,
+            url: details.url,
+          });
+        } catch (error) {
+          console.log("Popup not open, can't send new data notification");
+        }
+      });
     }
   }
 }
 
 chrome.webRequest.onBeforeSendHeaders.addListener(handleRequest, { urls: ["<all_urls>"] }, ["requestHeaders", "extraHeaders"]);
+
+// Handle tab activation to update popup data when switching tabs
+chrome.tabs.onActivated.addListener(async (activeInfo) => {
+  console.log("Tab activated:", activeInfo.tabId);
+
+  // Send message to popup if it's open to refresh data
+  try {
+    chrome.runtime.sendMessage({
+      type: "TAB_ACTIVATED",
+      tabId: activeInfo.tabId,
+    });
+  } catch (error) {
+    // Popup is not open, ignore error
+    console.log("Popup not open, can't send message");
+  }
+});
+
+// Handle tab updates (URL changes, page loads)
+chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
+  if (changeInfo.status === "complete" && tab.active) {
+    console.log("Tab updated and complete:", tabId);
+
+    // Send message to popup if it's open to refresh data
+    try {
+      chrome.runtime.sendMessage({
+        type: "TAB_UPDATED",
+        tabId: tabId,
+        url: tab.url,
+      });
+    } catch (error) {
+      // Popup is not open, ignore error
+      console.log("Popup not open, can't send message");
+    }
+  }
+});

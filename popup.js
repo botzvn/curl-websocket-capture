@@ -35,6 +35,7 @@ function formatObjectForDisplay(obj) {
 }
 
 function getDomainFromUrl(url) {
+  console.log("🚀 ~ getDomainFromUrl ~ url:", url);
   try {
     const urlObj = new URL(url);
     const hostname = urlObj.hostname;
@@ -49,28 +50,25 @@ function getDomainFromUrl(url) {
   }
 }
 
+function getCurrentDomain() {
+  return new Promise((resolve) => {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      const url = tabs[0]?.url;
+      if (!url) return resolve(undefined);
+      resolve(getDomainFromUrl(url));
+    });
+  });
+}
+
 function clearOldStorageData() {
   chrome.storage.local.get(null, (items) => {
-    const keysToRemove = [];
     for (const key in items) {
       if (key.startsWith("httpData_") || key.startsWith("wsData_")) {
         const domain = key.replace(/^(httpData_|wsData_)/, "");
-        const rootDomain = getDomainFromUrl(`https://${domain}`);
-
-        if (domain !== rootDomain) {
-          keysToRemove.push(key);
-        }
+        chrome.storage.local.remove(domain, () => {
+          console.log("Cleared old storage keys:", domain);
+        });
       }
-
-      if (key === "lastHttpRequest" || key === "lastWsRequest") {
-        keysToRemove.push(key);
-      }
-    }
-
-    if (keysToRemove.length > 0) {
-      chrome.storage.local.remove(keysToRemove, () => {
-        console.log("Cleared old storage keys:", keysToRemove);
-      });
     }
   });
 }
@@ -82,8 +80,8 @@ function loadAndApplySettings() {
   });
 }
 
-function saveSettings() {
-  const presetToSave = document.querySelector('input[name="preset"]:checked').value;
+async function saveSettings() {
+  const presetToSave = await getCurrentDomain();
   const overrideKeywords = document.getElementById("overrideKeywords").value;
   const overrideKeywordsWS = document.getElementById("overrideKeywordsWS").value;
 
@@ -103,7 +101,8 @@ function saveSettings() {
 
     chrome.storage.sync.set({ settings: newSettings }, () => {
       const status = document.getElementById("status");
-      status.textContent = `Preset '${presetToSave}' saved!`;
+      status.textContent = `saved!`;
+      status.style.marginRight = "10px";
       setTimeout(() => (status.textContent = ""), 2000);
     });
   });
@@ -112,11 +111,6 @@ function saveSettings() {
 function updateUiWithOptions(settings) {
   const activePreset = settings.preset || "default";
   const presetsConfig = settings.presets || {};
-
-  document.getElementById("activePreset").value = activePreset;
-
-  const radio = document.querySelector(`input[name="preset"][value="${activePreset}"]`);
-  if (radio) radio.checked = true;
 
   const activePresetConfig = presetsConfig[activePreset] || {};
   document.getElementById("overrideKeywords").value = activePresetConfig.overrideKeywords || "";
@@ -135,11 +129,6 @@ function getCurrentDomainAndLoadData() {
     console.log(`Domain extraction: ${originalHostname} → ${domain}`);
 
     displayAllCapturedRequests(domain);
-
-    const domainInfo = document.getElementById("currentDomain");
-    if (domainInfo) {
-      domainInfo.textContent = `Current domain: ${domain}`;
-    }
   });
 }
 
@@ -149,11 +138,8 @@ function autoDetectAndSetPreset() {
       loadAndApplySettings();
       return;
     }
-    const url = new URL(tabs[0].url);
-    let detectedPreset = "default";
 
-    if (url.hostname.includes("tiktok.com")) detectedPreset = "tiktok";
-    else if (url.hostname.includes("facebook.com") || url.hostname.includes("messenger.com")) detectedPreset = "facebook";
+    let detectedPreset = getDomainFromUrl(tabs[0].url);
 
     chrome.storage.sync.get("settings", ({ settings = {} }) => {
       const newSettings = { ...settings, preset: detectedPreset };
@@ -161,6 +147,13 @@ function autoDetectAndSetPreset() {
         updateUiWithOptions(newSettings);
       });
     });
+  });
+}
+
+function saveAndReloadBtn() {
+  saveSettings();
+  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    chrome.tabs.reload(tabs[0].id);
   });
 }
 
@@ -172,17 +165,6 @@ function setupEventListeners() {
 
       const target = tab.dataset.tab;
       document.querySelectorAll(".tab-content").forEach((c) => c.classList.toggle("active", c.id === target));
-    });
-  });
-
-  document.getElementById("activePreset").addEventListener("change", (event) => {
-    const newActivePreset = event.target.value;
-    chrome.storage.sync.get("settings", (data) => {
-      const settings = data.settings || {};
-      const newSettings = { ...settings, preset: newActivePreset };
-      chrome.storage.sync.set({ settings: newSettings }, () => {
-        updateUiWithOptions(newSettings);
-      });
     });
   });
 
@@ -199,18 +181,19 @@ function setupEventListeners() {
     });
   });
 
-  document.getElementById("saveButton").addEventListener("click", saveSettings);
+  // document.getElementById("saveButton").addEventListener("click", saveSettings);
+  document.getElementById("saveAndReloadBtn").addEventListener("click", saveAndReloadBtn);
 
-  document.getElementById("copyHttpButton").addEventListener("click", () => copyDataAsJson("http", "copyHttpButton"));
-  document.getElementById("copyWsButton").addEventListener("click", () => copyDataAsJson("ws", "copyWsButton"));
+  // document.getElementById("copyHttpButton").addEventListener("click", () => copyDataAsJson("http", "copyHttpButton"));
+  // document.getElementById("copyWsButton").addEventListener("click", () => copyDataAsJson("ws", "copyWsButton"));
   document.getElementById("copyAllButton").addEventListener("click", () => copyAllDataAsJson("copyAllButton"));
 
   document.getElementById("reloadButton").addEventListener("click", () => {
     getCurrentDomainAndLoadData();
     const reloadBtn = document.getElementById("reloadButton");
     const originalContent = reloadBtn.innerHTML;
-    reloadBtn.innerHTML = `<svg class="button-icon" width="20" height="20" viewBox="0 0 0.5 0.5" aria-hidden="true" focusable="false" style="animation: spin 1s linear infinite;">
-                <path fill="#fff" d="M0.482 0.3a0.018 0.018 0 0 1 0.018 0.018v0.08a0.018 0.018 0 0 1 -0.017 0.018 0.018 0.018 0 0 1 -0.017 -0.018v-0.028C0.419 0.446 0.335 0.5 0.244 0.5c-0.11 0 -0.203 -0.068 -0.243 -0.173a0.018 0.018 0 0 1 0.01 -0.023c0.009 -0.004 0.019 0.001 0.023 0.01 0.035 0.092 0.115 0.15 0.21 0.15 0.084 0 0.163 -0.055 0.2 -0.129l-0.037 0a0.018 0.018 0 0 1 -0.018 -0.018 0.018 0.018 0 0 1 0.017 -0.018zm-0.226 -0.3c0.11 0 0.203 0.068 0.243 0.173a0.018 0.018 0 0 1 -0.01 0.023 0.017 0.017 0 0 1 -0.023 -0.01c-0.035 -0.092 -0.115 -0.15 -0.21 -0.15 -0.084 0 -0.163 0.055 -0.2 0.129l0.037 0a0.018 0.018 0 0 1 0.018 0.018 0.018 0.018 0 0 1 -0.017 0.018L0.018 0.2A0.018 0.018 0 0 1 0 0.182V0.102c0 -0.01 0.008 -0.018 0.017 -0.018s0.017 0.008 0.017 0.018v0.028C0.081 0.054 0.165 0 0.256 0"/>
+    reloadBtn.innerHTML = `<svg class="button-icon" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" focusable="false" style="animation: spin 1s linear infinite; vertical-align: middle;">
+                <path fill="currentColor" d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/>
               </svg>`;
     setTimeout(() => {
       reloadBtn.innerHTML = originalContent;
@@ -226,8 +209,8 @@ function displayAllCapturedRequests(domain) {
 
   chrome.storage.local.get([httpKey, wsKey], (data) => {
     console.log(`Found data:`, data);
-    renderRequestDetails(data[httpKey], "http-output", "copyHttpButton", "No HTTP request captured yet.", domain);
-    renderRequestDetails(data[wsKey], "ws-output", "copyWsButton", "No WebSocket handshake captured yet.", domain);
+    renderRequestDetails({ request: data[httpKey], outputId: "http-output", emptyMessage: "No HTTP request captured yet.", domain });
+    renderRequestDetails({ request: data[wsKey], outputId: "ws-output", emptyMessage: "No WebSocket handshake captured yet.", domain });
 
     const copyAllContainer = document.getElementById("copyAllContainer");
     if (data[httpKey] || data[wsKey]) {
@@ -238,23 +221,23 @@ function displayAllCapturedRequests(domain) {
   });
 }
 
-function renderRequestDetails(request, outputId, buttonId, emptyMessage, domain) {
+function renderRequestDetails({ request, outputId, emptyMessage }) {
   const output = document.getElementById(outputId);
-  const copyBtn = document.getElementById(buttonId);
 
   if (!request) {
     output.innerHTML = `<p class="no-request">${emptyMessage}</p>`;
-    copyBtn.style.display = "default";
     return;
   }
 
-  copyBtn.style.display = "flex";
-
   const headers = request.headers;
   const params = extractParams(request.url);
-  const cookies = extractCookies(headers);
+  const cookies = extractCookies(request.headers);
+
+  // Add timestamp for when data was captured
+  const timestamp = new Date().toLocaleString();
 
   output.innerHTML = `
+    
       <details class="result-details" open>
         <summary>URL</summary>
         <div class="result-details-content"><pre>${request.url}</pre></div>
@@ -361,6 +344,34 @@ function copyToClipboard(text, btn) {
     .catch((err) => console.error("Copy error: ", err));
 }
 
+function flashElementGreen(dataType) {
+  if (!document.getElementById("flashAnimationStyle")) {
+    const style = document.createElement("style");
+    style.id = "flashAnimationStyle";
+    style.textContent = `
+      @keyframes flashGreen {
+        0% { color: #666; }
+        50% { color: #4CAF50; font-weight: bold; }
+        100% { color: #666; }
+      }
+      .data-timestamp.flash-green {
+        animation: flashGreen 0.8s ease-in-out 3;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  const timestampElement = document.querySelector(".data-timestamp");
+
+  if (timestampElement) {
+    timestampElement.classList.add("flash-green");
+    timestampElement.textContent = `📡 Captured: ${new Date().toLocaleString()}`;
+    setTimeout(() => {
+      timestampElement.classList.remove("flash-green");
+    }, 800);
+  }
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   clearOldStorageData();
 
@@ -368,19 +379,34 @@ document.addEventListener("DOMContentLoaded", () => {
   setupEventListeners();
   getCurrentDomainAndLoadData();
 
-  chrome.tabs.onActivated.addListener(() => {
-    setTimeout(() => {
-      getCurrentDomainAndLoadData();
-      autoDetectAndSetPreset();
-    }, 0);
-  });
+  // Listen for messages from background script about tab changes
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    console.log("Received message from background:", message);
 
-  chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-    if (changeInfo.status === "complete" && tab.active) {
+    if (message.type === "TAB_ACTIVATED" || message.type === "TAB_UPDATED") {
       setTimeout(() => {
         getCurrentDomainAndLoadData();
         autoDetectAndSetPreset();
-      }, 0);
+      }, 100); // Small delay to ensure tab info is updated
+    } else if (message.type === "NEW_DATA_CAPTURED") {
+      // Real-time update when new data is captured
+      console.log(`New ${message.dataType} data captured for ${message.domain}`);
+
+      // Check if this data is for current domain
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        if (tabs[0]?.url) {
+          const currentDomain = getDomainFromUrl(tabs[0].url);
+          if (currentDomain === message.domain) {
+            // Flash elements green for new data
+            flashElementGreen(message.dataType);
+
+            // Refresh data display
+            setTimeout(() => {
+              getCurrentDomainAndLoadData();
+            }, 50);
+          }
+        }
+      });
     }
   });
 });

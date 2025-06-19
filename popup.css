@@ -142,7 +142,7 @@ textarea {
 details {
   border: 1px solid var(--border-color);
   border-radius: 6px;
-  margin-top: 16px;
+  margin-top: 10px;
 }
 summary {
   font-weight: 500;
@@ -169,7 +169,6 @@ details[open] summary:after {
 
 /* Nút bấm */
 .button-container {
-  margin-top: 16px;
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -232,8 +231,14 @@ details[open] summary:after {
 .capture-header {
   display: flex;
   align-items: center;
-  /* justify-content: space-between; */
+  justify-content: space-between;
 }
+
+/* .capture-header-left {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+} */
 
 .capture-title {
   margin-bottom: 0;
@@ -241,6 +246,7 @@ details[open] summary:after {
 
 .capture-section {
   margin-bottom: 15px;
+  margin-top: 15px;
 }
 
 hr.separator {

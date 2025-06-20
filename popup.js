@@ -382,11 +382,24 @@ document.addEventListener("DOMContentLoaded", () => {
   setupEventListeners();
   getCurrentDomainAndLoadData();
 
-  // Listen for messages from background script about tab changes
+  // Notify background that popup is open
+  chrome.runtime
+    .sendMessage({
+      type: "POPUP_OPENED",
+    })
+    .catch(() => {
+      console.log("Background script not ready");
+    });
+
+  // Check permissions status and show request button if needed
+  checkPermissionsStatus();
+
+  // Listen for messages from background script about data changes
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     console.log("Received message from background:", message);
 
-    if (message.type === "TAB_ACTIVATED" || message.type === "TAB_UPDATED") {
+    if (message.type === "TAB_UPDATED") {
+      // Only refresh if URL actually changed significantly
       setTimeout(() => {
         getCurrentDomainAndLoadData();
         autoDetectAndSetPreset();
@@ -410,6 +423,102 @@ document.addEventListener("DOMContentLoaded", () => {
           }
         }
       });
+    } else if (message.type === "PERMISSIONS_RESULT") {
+      // Handle permission request result from background
+      console.log("📨 Received permission result:", message.granted);
+
+      if (message.granted) {
+        // Hide the permission button if still visible
+        const permissionButton = document.getElementById("permissionButton");
+        if (permissionButton) {
+          permissionButton.remove();
+          console.log("🗑️ Permission button removed after grant");
+        }
+
+        // Refresh permission status
+        checkPermissionsStatus();
+      }
     }
   });
 });
+
+async function checkPermissionsStatus() {
+  console.log("🔍 Checking permissions status...");
+
+  const permissions = {
+    origins: ["<all_urls>"],
+  };
+
+  try {
+    const hasPermissions = await chrome.permissions.contains(permissions);
+    console.log("🚀 ~ checkPermissionsStatus ~ hasPermissions:", hasPermissions);
+
+    if (!hasPermissions) {
+      console.log("❌ No permissions found, showing request button");
+      showPermissionRequestButton();
+    } else {
+      console.log("✅ Permissions already granted");
+
+      // Notify background to setup webRequest listener if not already done
+      console.log("🔄 Notifying background to setup webRequest listener...");
+      chrome.runtime
+        .sendMessage({
+          type: "PERMISSIONS_GRANTED",
+        })
+        .then(() => {
+          console.log("✅ Background notified about existing permissions");
+        })
+        .catch((error) => {
+          console.log("❌ Failed to notify background:", error.message);
+        });
+    }
+  } catch (error) {
+    console.error("❌ Error checking permissions:", error);
+  }
+}
+
+function showPermissionRequestButton() {
+  console.log("🔘 Creating permission request button...");
+
+  // Create permission request button if it doesn't exist
+  if (!document.getElementById("permissionButton")) {
+    const permissionButton = document.createElement("button");
+    permissionButton.id = "permissionButton";
+    permissionButton.className = "button";
+    permissionButton.style.cssText = `
+      background: #ff9800;
+      margin-bottom: 10px;
+      width: 100%;
+    `;
+    permissionButton.innerHTML = "🔒 Grant Host Permissions to Capture Requests";
+    permissionButton.addEventListener("click", requestHostPermissions);
+
+    // Insert at the top of the filter section
+    const filterSection = document.querySelector(".filter-section");
+    if (filterSection) {
+      filterSection.insertBefore(permissionButton, filterSection.firstChild);
+      console.log("✅ Permission button added to DOM");
+    } else {
+      console.error("❌ Could not find .filter-section to add button");
+    }
+  } else {
+    console.log("⚠️ Permission button already exists");
+  }
+}
+
+async function requestHostPermissions() {
+  console.log("🔒 User clicked permission request button");
+
+  // Send message to background to handle permission request
+  // Background script will persist even when popup closes
+  try {
+    console.log("📤 Sending REQUEST_PERMISSIONS message to background...");
+    await chrome.runtime.sendMessage({
+      type: "REQUEST_PERMISSIONS",
+    });
+    console.log("✅ Permission request message sent to background");
+  } catch (error) {
+    console.error("❌ Error sending permission request message:", error);
+    alert("❌ Error requesting permissions. Please try again.");
+  }
+}

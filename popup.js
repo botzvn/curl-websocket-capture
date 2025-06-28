@@ -34,6 +34,70 @@ function formatObjectForDisplay(obj) {
   return entries.length ? entries.map(([k, v]) => `${k}: ${v}`).join("\n") : "default";
 }
 
+function formatBodyForDisplay(body) {
+  if (!body) return "No body data";
+
+  switch (body.type) {
+    case "json":
+      // For JSON, flatten to key-value pairs like params/cookies
+      if (typeof body.data === "object" && body.data !== null) {
+        return formatObjectForDisplay(flattenObject(body.data));
+      }
+      return body.raw || JSON.stringify(body.data);
+    case "formData":
+      // FormData is already in key-value format
+      const formDataObj = {};
+      Object.entries(body.data).forEach(([key, values]) => {
+        formDataObj[key] = Array.isArray(values) ? values.join(", ") : values;
+      });
+      return formatObjectForDisplay(formDataObj);
+    case "text":
+      return body.data;
+    case "error":
+      return `Error parsing body: ${body.error}`;
+    default:
+      return "Unknown body format";
+  }
+}
+
+function flattenObject(obj, prefix = "") {
+  const flattened = {};
+
+  for (const key in obj) {
+    if (obj.hasOwnProperty(key)) {
+      const newKey = prefix ? `${prefix}.${key}` : key;
+
+      if (typeof obj[key] === "object" && obj[key] !== null && !Array.isArray(obj[key])) {
+        Object.assign(flattened, flattenObject(obj[key], newKey));
+      } else {
+        flattened[newKey] = Array.isArray(obj[key]) ? obj[key].join(", ") : obj[key];
+      }
+    }
+  }
+
+  return flattened;
+}
+
+function getBodyFieldCount(body) {
+  if (!body) return 0;
+
+  switch (body.type) {
+    case "json":
+      if (typeof body.data === "object" && body.data !== null) {
+        return Object.keys(flattenObject(body.data)).length;
+      }
+      return 1;
+    case "formData":
+      return Object.keys(body.data).length;
+    case "text":
+      return 1;
+    case "error":
+      return 0;
+    default:
+      return 0;
+  }
+}
+
 function getDomainFromUrl(url) {
   console.log("🚀 ~ getDomainFromUrl ~ url:", url);
   try {
@@ -236,8 +300,14 @@ function renderRequestDetails({ request, outputId, emptyMessage }) {
   // Add timestamp for when data was captured
   const timestamp = new Date().toLocaleString();
 
+  // Check if request has body data
+  const hasBody = request.body && request.body.type !== "error";
+  const bodyFieldCount = hasBody ? getBodyFieldCount(request.body) : 0;
+
   output.innerHTML = `
-    
+      <div class="data-timestamp" style="color: #666; font-size: 11px; margin-bottom: 10px; text-align: right;">
+        📡 Captured: ${timestamp}
+      </div>
       <details class="result-details" open>
         <summary>URL</summary>
         <div class="result-details-content"><pre>${request.url}</pre></div>
@@ -250,6 +320,16 @@ function renderRequestDetails({ request, outputId, emptyMessage }) {
         <summary>Params (${Object.keys(params).length})</summary>
         <div class="result-details-content"><pre>${formatObjectForDisplay(params)}</pre></div>
       </details>
+       ${
+         hasBody
+           ? `
+      <details class="result-details">
+        <summary>Body (${bodyFieldCount})</summary>
+        <div class="result-details-content"><pre>${formatBodyForDisplay(request.body)}</pre></div>
+      </details>
+      `
+           : ""
+       }
       <details class="result-details">
         <summary>Cookies (${Object.keys(cookies).length})</summary>
         <div class="result-details-content"><pre>${formatObjectForDisplay(cookies)}</pre></div>
@@ -276,6 +356,7 @@ function copyDataAsJson(type, buttonId) {
         headers: formatHeadersForJson(req.headers),
         params: extractParams(req.url),
         cookies: extractCookies(req.headers),
+        body: req.body || null,
       };
 
       const json = JSON.stringify(exportData, null, 2);
@@ -308,6 +389,7 @@ function copyAllDataAsJson(buttonId) {
           headers: formatHeadersForJson(httpRequest.headers),
           params: extractParams(httpRequest.url),
           cookies: extractCookies(httpRequest.headers),
+          body: httpRequest.body || null,
         };
       }
 
@@ -320,6 +402,7 @@ function copyAllDataAsJson(buttonId) {
           headers: formatHeadersForJson(wsRequest.headers),
           params: extractParams(wsRequest.url),
           cookies: extractCookies(wsRequest.headers),
+          body: wsRequest.body || null,
         };
       }
 

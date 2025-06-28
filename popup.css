@@ -384,3 +384,37 @@ select {
 [title] {
   /* This will hide the default tooltip in some browsers */
 }
+
+/* Request body styling */
+.result-details summary {
+  font-weight: bold;
+  cursor: pointer;
+  padding: 8px;
+  background: #f5f5f5;
+  border-radius: 4px;
+  margin-bottom: 4px;
+}
+
+.result-details[open] summary {
+  border-bottom: 1px solid #ddd;
+  border-radius: 4px 4px 0 0;
+  margin-bottom: 0;
+}
+
+.result-details-content {
+  padding: 12px;
+  background: #fafafa;
+  border-radius: 0 0 4px 4px;
+  border: 1px solid #ddd;
+  border-top: none;
+}
+
+.result-details-content pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  font-size: 12px;
+  line-height: 1.4;
+  max-height: 300px;
+  overflow-y: auto;
+}

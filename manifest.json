@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "cURL & WS Capture",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Capture network requests and WebSocket connections.",
   "permissions": ["webRequest", "storage", "activeTab"],
   "optional_host_permissions": ["<all_urls>", "ws://*/*", "wss://*/*"],

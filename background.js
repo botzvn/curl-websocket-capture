@@ -36,6 +36,7 @@ async function checkAndRequestPermissions() {
 }
 
 let webRequestListenerSetup = false;
+let pendingRequests = new Map(); // Store request data temporarily
 
 function setupWebRequestListener() {
   if (webRequestListenerSetup) {
@@ -44,13 +45,81 @@ function setupWebRequestListener() {
   }
 
   try {
-    // Only setup webRequest listener if we have permissions
-    chrome.webRequest.onBeforeSendHeaders.addListener(handleRequest, { urls: ["<all_urls>"] }, ["requestHeaders", "extraHeaders"]);
+    // Setup onBeforeRequest to capture request body
+    chrome.webRequest.onBeforeRequest.addListener(handleRequestBody, { urls: ["<all_urls>"] }, ["requestBody"]);
+
+    // Setup onBeforeSendHeaders to capture headers
+    chrome.webRequest.onBeforeSendHeaders.addListener(handleRequestHeaders, { urls: ["<all_urls>"] }, ["requestHeaders", "extraHeaders"]);
+
     webRequestListenerSetup = true;
-    console.log("✅ WebRequest listener setup successfully");
+    console.log("✅ WebRequest listeners setup successfully");
   } catch (error) {
     console.error("❌ Failed to setup WebRequest listener:", error);
     throw error;
+  }
+}
+
+function handleRequestBody(details) {
+  // Capture body for all requests (user removed POST/PUT/PATCH filter)
+  // if (!details.method || !['POST', 'PUT', 'PATCH'].includes(details.method.toUpperCase())) {
+  //   return;
+  // }
+
+  let body = null;
+
+  if (details.requestBody) {
+    try {
+      if (details.requestBody.formData) {
+        // Handle form data
+        body = {
+          type: "formData",
+          data: details.requestBody.formData,
+        };
+      } else if (details.requestBody.raw) {
+        // Handle raw data (JSON, text, etc.)
+        const rawData = details.requestBody.raw[0];
+        if (rawData && rawData.bytes) {
+          const decoder = new TextDecoder("utf-8");
+          const bodyText = decoder.decode(rawData.bytes);
+
+          // Try to parse as JSON
+          try {
+            const jsonData = JSON.parse(bodyText);
+            body = {
+              type: "json",
+              data: jsonData,
+              raw: bodyText,
+            };
+          } catch {
+            // Not JSON, store as text
+            body = {
+              type: "text",
+              data: bodyText,
+            };
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Error parsing request body:", error);
+      body = {
+        type: "error",
+        error: error.message,
+      };
+    }
+  }
+
+  // Store body data temporarily
+  pendingRequests.set(details.requestId, {
+    body: body,
+    timestamp: Date.now(),
+  });
+
+  // Clean up old requests (older than 30 seconds)
+  const cutoff = Date.now() - 30000;
+  for (const [requestId, data] of pendingRequests.entries()) {
+    if (data.timestamp < cutoff) {
+      pendingRequests.delete(requestId);
+    }
   }
 }
 
@@ -81,7 +150,7 @@ function getCurrentDomain() {
   });
 }
 
-async function handleRequest(details) {
+async function handleRequestHeaders(details) {
   const currentDomain = await getCurrentDomain();
   const data = await chrome.storage.sync.get("settings");
   const settings = data.settings || { preset: currentDomain, presets: {} };
@@ -123,18 +192,32 @@ async function handleRequest(details) {
   }
 
   if (shouldCapture) {
+    // Get body data from pendingRequests if available
+    const pendingData = pendingRequests.get(details.requestId);
+    const requestBody = pendingData ? pendingData.body : null;
+
+    // Clean up this request from pending
+    if (pendingData) {
+      pendingRequests.delete(details.requestId);
+    }
+
     const requestData = {
       url: details.url,
       method: details.method,
       headers: details.requestHeaders,
       initiator: details.initiator,
       type: details.type,
+      body: requestBody, // Add body data
     };
 
     // Get domain from request URL to store data per site
     const originalHostname = new URL(details.url).hostname;
     const domain = getDomainFromUrl(details.url);
     console.log(`Capturing ${details.type.toUpperCase()}: ${originalHostname} → ${domain}`);
+
+    if (requestBody) {
+      console.log(`📦 Body captured for ${details.method} request:`, requestBody.type);
+    }
 
     if (isHttp) {
       const storageKey = `httpData_${domain}`;

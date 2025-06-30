@@ -13,14 +13,14 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg-color: #202124;
+    /* --bg-color: #202124;
     --text-color: #e8eaed;
     --secondary-text-color: #9aa0a6;
     --primary-color: #8ab4f8;
     --primary-hover-color: #a6c9fa;
     --border-color: #3c4043;
     --component-bg-color: #2d2e31;
-    --component-hover-bg: #3c4043;
+    --component-hover-bg: #3c4043; */
   }
 }
 
@@ -392,7 +392,7 @@ select {
   padding: 8px;
   background: #f5f5f5;
   border-radius: 4px;
-  margin-bottom: 4px;
+  /* margin-bottom: 4px; */
 }
 
 .result-details[open] summary {
@@ -405,7 +405,7 @@ select {
   padding: 12px;
   background: #fafafa;
   border-radius: 0 0 4px 4px;
-  border: 1px solid #ddd;
+  /* border: 1px solid #ddd; */
   border-top: none;
 }
 

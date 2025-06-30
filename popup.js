@@ -305,9 +305,6 @@ function renderRequestDetails({ request, outputId, emptyMessage }) {
   const bodyFieldCount = hasBody ? getBodyFieldCount(request.body) : 0;
 
   output.innerHTML = `
-      <div class="data-timestamp" style="color: #666; font-size: 11px; margin-bottom: 10px; text-align: right;">
-        📡 Captured: ${timestamp}
-      </div>
       <details class="result-details" open>
         <summary>URL</summary>
         <div class="result-details-content"><pre>${request.url}</pre></div>

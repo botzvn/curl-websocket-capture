@@ -245,12 +245,9 @@ function setupEventListeners() {
     });
   });
 
-  // document.getElementById("saveButton").addEventListener("click", saveSettings);
   document.getElementById("saveAndReloadBtn").addEventListener("click", saveAndReloadBtn);
-
-  // document.getElementById("copyHttpButton").addEventListener("click", () => copyDataAsJson("http", "copyHttpButton"));
-  // document.getElementById("copyWsButton").addEventListener("click", () => copyDataAsJson("ws", "copyWsButton"));
   document.getElementById("copyAllButton").addEventListener("click", () => copyAllDataAsJson("copyAllButton"));
+  document.getElementById("clearStorageButton").addEventListener("click", clearStorageAndReload);
 
   document.getElementById("reloadButton").addEventListener("click", () => {
     getCurrentDomainAndLoadData();
@@ -589,8 +586,6 @@ function showPermissionRequestButton() {
 async function requestHostPermissions() {
   console.log("🔒 User clicked permission request button");
 
-  // Send message to background to handle permission request
-  // Background script will persist even when popup closes
   try {
     console.log("📤 Sending REQUEST_PERMISSIONS message to background...");
     await chrome.runtime.sendMessage({
@@ -601,4 +596,30 @@ async function requestHostPermissions() {
     console.error("❌ Error sending permission request message:", error);
     alert("❌ Error requesting permissions. Please try again.");
   }
+}
+
+function clearStorageAndReload() {
+  const btn = document.getElementById("clearStorageButton");
+  const originalContent = btn.innerHTML;
+  
+  btn.innerHTML = 'Clearing...';
+  btn.disabled = true;
+  
+  chrome.storage.local.clear(() => {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (tabs[0]?.id) {
+        chrome.tabs.reload(tabs[0].id, () => {
+          btn.innerHTML = '✅ Cleared!';
+          setTimeout(() => {
+            btn.innerHTML = originalContent;
+            btn.disabled = false;
+            getCurrentDomainAndLoadData();
+          }, 1500);
+        });
+      } else {
+        btn.innerHTML = originalContent;
+        btn.disabled = false;
+      }
+    });
+  });
 }

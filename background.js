@@ -27,6 +27,7 @@ async function checkAndRequestPermissions() {
       return;
     } else {
       setupWebRequestListener();
+      setupAutoSyncInterval();
     }
   } catch (error) {
     console.error('Error checking permissions:', error);
@@ -34,7 +35,9 @@ async function checkAndRequestPermissions() {
 }
 
 let webRequestListenerSetup = false;
+
 let pendingRequests = new Map();
+const inMemoryCapturedData = {};
 
 function setupWebRequestListener() {
   if (webRequestListenerSetup) {
@@ -250,29 +253,33 @@ async function handleRequestHeaders(details) {
     const domain = getDomainFromUrl(details.url);
 
     if (isHttp) {
-      const storageKey = `httpData_${domain}`;
-      chrome.storage.local.set({ [storageKey]: requestData }, () => {
-        chrome.runtime
-          .sendMessage({
-            type: 'NEW_DATA_CAPTURED',
-            dataType: 'http',
-            domain: domain,
-            url: details.url,
-          })
-          .catch(() => {});
-      });
+      if (!inMemoryCapturedData[domain]) {
+        inMemoryCapturedData[domain] = {};
+      }
+      inMemoryCapturedData[domain].http = requestData;
+
+      chrome.runtime
+        .sendMessage({
+          type: 'NEW_DATA_CAPTURED',
+          dataType: 'http',
+          domain: domain,
+          url: details.url,
+        })
+        .catch(() => {});
     } else if (isWs) {
-      const storageKey = `wsData_${domain}`;
-      chrome.storage.local.set({ [storageKey]: requestData }, () => {
-        chrome.runtime
-          .sendMessage({
-            type: 'NEW_DATA_CAPTURED',
-            dataType: 'ws',
-            domain: domain,
-            url: details.url,
-          })
-          .catch(() => {});
-      });
+      if (!inMemoryCapturedData[domain]) {
+        inMemoryCapturedData[domain] = {};
+      }
+      inMemoryCapturedData[domain].ws = requestData;
+
+      chrome.runtime
+        .sendMessage({
+          type: 'NEW_DATA_CAPTURED',
+          dataType: 'ws',
+          domain: domain,
+          url: details.url,
+        })
+        .catch(() => {});
     }
   }
 }
@@ -290,6 +297,25 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     handlePermissionRequest(sender);
   } else if (message.type === 'POPUP_OPENED') {
     sendResponse({ status: 'ready' });
+  } else if (message.type === 'SYNC_CONFIG_UPDATED') {
+    console.log('🔄 Config updated, restarting sync interval...');
+    setupAutoSyncInterval();
+  } else if (message.type === 'GET_CAPTURED_DATA') {
+    const domain = message.domain;
+    // Return data for the requested domain, or empty object if none
+    const data = inMemoryCapturedData[domain] || {};
+    sendResponse(data);
+  } else if (message.type === 'CLEAR_DATA') {
+    const domain = message.domain;
+    if (domain) {
+      delete inMemoryCapturedData[domain];
+    } else {
+      // Clear all if no domain specified
+      for (const key in inMemoryCapturedData) {
+        delete inMemoryCapturedData[key];
+      }
+    }
+    sendResponse({ success: true });
   }
 });
 
@@ -328,5 +354,184 @@ async function handlePermissionRequest(sender) {
     }
   } catch (error) {
     console.error('❌ Error requesting permissions in background:', error);
+  }
+}
+
+// ==================== HELPERS FOR DATA FORMATTING ====================
+
+function extractParams(urlString) {
+  try {
+    const url = new URL(urlString);
+    const params = new URLSearchParams(url.search);
+    return Object.fromEntries(params.entries());
+  } catch {
+    return {};
+  }
+}
+
+function extractCookies(headers) {
+  if (!headers) return {};
+  const cookieHeader = headers.find((h) => h.name.toLowerCase() === 'cookie');
+  if (!cookieHeader) return {};
+
+  const cookies = {};
+  cookieHeader.value.split(';').forEach((cookie) => {
+    const [name, value] = cookie.split('=');
+    if (name && value) {
+      cookies[name.trim()] = value.trim();
+    }
+  });
+  return cookies;
+}
+
+function formatHeadersForJson(headers) {
+  if (!headers) return {};
+  return headers.reduce((obj, h) => {
+    if (!h.name.startsWith(':')) obj[h.name] = h.value;
+    return obj;
+  }, {});
+}
+
+let autoSyncIntervalId = null;
+
+/**
+ * Setup or restart the auto-sync interval
+ */
+async function setupAutoSyncInterval() {
+  if (autoSyncIntervalId) {
+    clearInterval(autoSyncIntervalId);
+    autoSyncIntervalId = null;
+  }
+
+  const data = await chrome.storage.sync.get('syncConfig');
+  const config = data.syncConfig;
+
+  if (config && config.autoSync) {
+    const intervalSeconds = config.syncInterval || 30; // Default 30s
+    console.log(`⏱️ Starting auto-sync interval: every ${intervalSeconds}s`);
+
+    // Run immediately once
+    performAutoSync();
+
+    autoSyncIntervalId = setInterval(() => {
+      performAutoSync();
+    }, intervalSeconds * 1000);
+  } else {
+    console.log('⏹️ Auto-sync disabled or not configured');
+  }
+}
+
+/**
+ * Perform auto-sync for the current active tab
+ * Called by interval timer
+ */
+async function performAutoSync() {
+  console.log(`🔄 performAutoSync (interval tick) called`);
+
+  // Get current domain
+  const domain = await getCurrentDomain();
+  if (!domain) {
+    console.log('Skipping auto-sync: No active domain found');
+    return;
+  }
+
+  try {
+    // Get sync config
+    const data = await chrome.storage.sync.get('syncConfig');
+    const config = data.syncConfig;
+
+    // Check if auto-sync is enabled and API URL is configured
+    if (!config || !config.autoSync || !config.apiUrl) {
+      console.log('Skipping auto-sync: Not enabled or no API URL');
+      // Should stop interval here? Maybe not, settings might change.
+      // But verify if we should be running at all.
+      return;
+    }
+
+    // Get captured data
+    const domainData = inMemoryCapturedData[domain] || {};
+    console.log(`📦 Captured data found for ${domain}:`, { http: !!domainData.http, ws: !!domainData.ws });
+
+    if (!domainData.http && !domainData.ws) {
+      console.log('Skipping auto-sync: No data found');
+      return;
+    }
+
+    // Build payload to match popup.js buildExportData logic
+    const payload = {
+      autoSync: true, // Metadata for the server to know it's auto-sync
+    };
+
+    if (domainData.http) {
+      const httpReq = domainData.http;
+      payload.http = {
+        type: httpReq.type,
+        url: httpReq.url,
+        method: httpReq.method,
+        timestamp: new Date().toISOString(), // Consistent timestamp generation
+        headers: formatHeadersForJson(httpReq.headers),
+        params: extractParams(httpReq.url),
+        cookies: extractCookies(httpReq.headers),
+        body: httpReq.body || null,
+      };
+    }
+
+    if (domainData.ws) {
+      const wsReq = domainData.ws;
+      payload.ws = {
+        type: wsReq.type,
+        url: wsReq.url,
+        method: wsReq.method,
+        timestamp: new Date().toISOString(),
+        headers: formatHeadersForJson(wsReq.headers),
+        params: extractParams(wsReq.url),
+        cookies: extractCookies(wsReq.headers),
+        body: wsReq.body || null,
+      };
+    }
+
+    // Build authorization header
+    let authHeader = {};
+    if (config.authValue && config.authType !== 'none') {
+      switch (config.authType) {
+        case 'bearer':
+          authHeader = { Authorization: `Bearer ${config.authValue}` };
+          break;
+        case 'apikey':
+          authHeader = { 'X-API-Key': config.authValue };
+          break;
+        case 'basic':
+          authHeader = { Authorization: `Basic ${btoa(config.authValue)}` };
+          break;
+      }
+    }
+
+    // Define sync function
+    const doSync = async () => {
+      console.log(`🚀 Executing sync for ${domain} to ${config.apiUrl}`);
+      try {
+        const response = await fetch(config.apiUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...authHeader,
+          },
+          body: JSON.stringify(payload),
+        });
+
+        if (response.ok) {
+          console.log(`✅ Auto-sync successful for ${domain}`);
+        } else {
+          console.error(`❌ Auto-sync failed: ${response.status} ${response.statusText}`);
+        }
+      } catch (error) {
+        console.error('❌ Auto-sync error:', error);
+      }
+    };
+
+    // Execute sync immediately (interval handles spacing)
+    doSync();
+  } catch (error) {
+    console.error('❌ Auto-sync error:', error);
   }
 }

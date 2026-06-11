@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!doctype html>
 <html>
   <head>
     <title>Dynamic Catcher</title>
@@ -11,7 +11,7 @@
         <svg class="icon" viewBox="0 0 24 24"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>
         Capture
       </button>
-      <button class="tab-button" data-tab="settings" disabled>
+      <button class="tab-button" data-tab="settings">
         <svg class="icon" viewBox="0 0 24 24">
           <path
             d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 0 2l-.15.08a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1 0-2l.15-.08a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"
@@ -67,6 +67,17 @@
                 Clear All
               </button>
               <button
+                id="syncButton"
+                class="copy-button sync-button"
+                style="height: 42px; padding: 8px; font-size: 14px; width: 100px; display: flex; align-items: center; justify-content: space-evenly; background: #4caf50"
+                title="Sync captured data to configured server"
+              >
+                <svg class="button-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M12 19V5M5 12l7-7 7 7" />
+                </svg>
+                Sync
+              </button>
+              <button
                 id="copyAllButton"
                 class="copy-button"
                 style="height: 42px; padding: 8px; font-size: 14px; width: 100px; display: flex; align-items: center; justify-content: space-evenly"
@@ -93,35 +104,73 @@
           </div>
         </div>
       </div>
-      <!-- <div id="settings" class="tab-content">
-        <h3>Presets</h3>
-        <div class="preset-options">
-          <input type="radio" id="preset-none" name="preset" value="default" checked />
-          <label for="preset-none">Default</label>
 
-          <input type="radio" id="preset-tiktok" name="preset" value="tiktok" />
-          <label for="preset-tiktok">TikTok</label>
+      <div id="settings" class="tab-content">
+        <div class="settings-section">
+          <h3 class="settings-title">
+            <svg class="icon" viewBox="0 0 24 24" style="vertical-align: middle; margin-right: 8px">
+              <path d="M12 19V5M5 12l7-7 7 7" />
+            </svg>
+            Sync Configuration
+          </h3>
 
-          <input type="radio" id="preset-facebook" name="preset" value="facebook" />
-          <label for="preset-facebook">Facebook</label>
-        </div>
+          <div class="settings-form">
+            <div class="form-group">
+              <label for="syncApiUrl">API Endpoint</label>
+              <input type="url" id="syncApiUrl" placeholder="https://your-server.com/api/sync" class="settings-input" />
+            </div>
 
-        <details open>
-          <summary>Custom Overrides</summary>
-          <div class="details-content">
-            <label for="overrideKeywords">HTTP Keywords (mỗi từ khóa một dòng):</label>
-            <textarea id="overrideKeywords"></textarea>
+            <div class="form-group">
+              <label for="syncAuthType">Authorization Type</label>
+              <select id="syncAuthType" class="settings-select">
+                <option value="none">None</option>
+                <option value="bearer">Bearer Token</option>
+                <option value="apikey">API Key</option>
+                <option value="basic">Basic Auth</option>
+              </select>
+            </div>
 
-            <label for="overrideKeywordsWS">WebSocket Keywords (mỗi từ khóa một dòng):</label>
-            <textarea id="overrideKeywordsWS"></textarea>
+            <div class="form-group" id="authValueGroup">
+              <label for="syncAuthValue" id="authValueLabel">Authorization Value</label>
+              <input type="text" id="syncAuthValue" placeholder="Enter token or API key" class="settings-input" />
+            </div>
+
+            <div class="form-group toggle-group">
+              <label class="toggle-label">
+                <input type="checkbox" id="autoSyncToggle" />
+                <span class="toggle-slider"></span>
+                <span class="toggle-text">Auto-sync when data captured</span>
+              </label>
+            </div>
+
+            <div class="form-group" id="syncDelayGroup">
+              <label for="syncDelay">Interval (seconds)</label>
+              <input type="number" id="syncDelay" min="1" placeholder="30" class="settings-input" />
+              <p class="help-text" style="font-size: 11px; color: #888; margin-top: 4px">Sync captured data every X seconds.</p>
+            </div>
+
+            <div class="settings-actions">
+              <button id="testConnectionBtn" class="button button-secondary">
+                <svg class="button-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                  <polyline points="22 4 12 14.01 9 11.01" />
+                </svg>
+                Test Connection
+              </button>
+              <button id="saveSyncSettingsBtn" class="button">
+                <svg class="button-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+                  <polyline points="17 21 17 13 7 13 7 21" />
+                  <polyline points="7 3 7 8 15 8" />
+                </svg>
+                Save Settings
+              </button>
+            </div>
+
+            <div id="syncSettingsStatus" class="settings-status"></div>
           </div>
-        </details>
-
-        <div class="button-container">
-          <button id="saveButton" class="button">Save Settings</button>
-          <span id="status"></span>
         </div>
-      </div> -->
+      </div>
     </main>
 
     <script src="popup.js"></script>

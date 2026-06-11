@@ -418,3 +418,224 @@ select {
   max-height: 300px;
   overflow-y: auto;
 }
+
+/* Settings Page Styles */
+.settings-section {
+  padding: 0;
+}
+
+.settings-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 20px;
+  color: var(--text-color);
+  display: flex;
+  align-items: center;
+}
+
+.settings-title .icon {
+  stroke: var(--primary-color);
+}
+
+.settings-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-group label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-color);
+  margin-bottom: 0;
+}
+
+.settings-input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  font-size: 14px;
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  box-sizing: border-box;
+}
+
+.settings-input:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.1);
+}
+
+.settings-input::placeholder {
+  color: var(--secondary-text-color);
+}
+
+.settings-select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  font-size: 14px;
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  cursor: pointer;
+  transition: border-color 0.2s ease;
+}
+
+.settings-select:focus {
+  outline: none;
+  border-color: var(--primary-color);
+}
+
+/* Toggle Switch */
+.toggle-group {
+  margin-top: 8px;
+}
+
+.toggle-label {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  user-select: none;
+  font-weight: normal !important;
+}
+
+.toggle-label input[type="checkbox"] {
+  display: none;
+}
+
+.toggle-slider {
+  width: 44px;
+  height: 24px;
+  background-color: var(--component-bg-color);
+  border-radius: 12px;
+  position: relative;
+  transition: background-color 0.2s ease;
+  margin-right: 12px;
+  flex-shrink: 0;
+  border: 1px solid var(--border-color);
+}
+
+.toggle-slider::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  background-color: white;
+  border-radius: 50%;
+  transition: transform 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.toggle-label input[type="checkbox"]:checked + .toggle-slider {
+  background-color: var(--primary-color);
+  border-color: var(--primary-color);
+}
+
+.toggle-label input[type="checkbox"]:checked + .toggle-slider::after {
+  transform: translateX(20px);
+}
+
+.toggle-text {
+  font-size: 14px;
+  color: var(--text-color);
+}
+
+/* Settings Actions */
+.settings-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.button-secondary {
+  background-color: var(--component-bg-color);
+  color: var(--text-color);
+  border: 1px solid var(--border-color);
+}
+
+.button-secondary:hover {
+  background-color: var(--component-hover-bg);
+}
+
+/* Settings Status */
+.settings-status {
+  min-height: 20px;
+  font-size: 13px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  display: none;
+}
+
+.settings-status.success {
+  display: block;
+  background-color: #e8f5e9;
+  color: #2e7d32;
+}
+
+.settings-status.error {
+  display: block;
+  background-color: #ffebee;
+  color: #c62828;
+}
+
+.settings-status.loading {
+  display: block;
+  background-color: #e3f2fd;
+  color: #1565c0;
+}
+
+/* Sync Button States */
+.sync-button {
+  transition: all 0.2s ease;
+}
+
+.sync-button:hover {
+  background-color: #43a047 !important;
+}
+
+.sync-button.loading {
+  background-color: #ffa726 !important;
+  cursor: wait;
+}
+
+.sync-button.success {
+  background-color: #66bb6a !important;
+}
+
+.sync-button.error {
+  background-color: #ef5350 !important;
+}
+
+.sync-button .button-icon {
+  transition: transform 0.3s ease;
+}
+
+.sync-button.loading .button-icon {
+  animation: syncSpin 1s linear infinite;
+}
+
+@keyframes syncSpin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Hide auth value group when auth type is none */
+#authValueGroup.hidden {
+  display: none;
+}
+
